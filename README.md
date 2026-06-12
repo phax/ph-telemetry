@@ -145,7 +145,7 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
-v0.9.0 - work in progress
+v1.0.0 - 2026-06-12
 * Initial release as a standalone repository. The abstraction (`Telemetry`, `TelemetryMetrics`, `ITelemetryTracerSPI`, `ITelemetryMeterSPI`, `TelemetryAttributes`, instrument interfaces, no-op fallbacks) is unchanged from its previous home in `ph-commons:ph-telemetry` v12.3.0 — only the Maven coordinates moved from `com.helger.commons:ph-telemetry` to `com.helger.telemetry:ph-telemetry`.
 * New module `ph-telemetry-otel` extracted from per-project OpenTelemetry bindings. Provides `OtelTelemetryTracerSPI` and `OtelTelemetryMeterSPI` as subclassable base classes that wrap the OpenTelemetry API; project subclasses supply only the instrumentation scope name and version.
 * `ph-telemetry-otel` depends on `opentelemetry-api` only — applications that also need the SDK (autoconfigure, OTLP exporter, etc.) pull those dependencies themselves at the deployment boundary.
