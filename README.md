@@ -7,7 +7,7 @@
 > If this project saved you some time or made your day a little easier, a star would mean a lot — it helps others find it too.
 <!-- ph-badge-end -->
 
-Java 17+ vendor-neutral telemetry abstraction (tracing + metrics) with a pluggable OpenTelemetry binding. Lets libraries emit spans and instruments without pulling the OpenTelemetry API into their dependency graph, and lets applications swap in a real backend (or a no-op) via `ServiceLoader`.
+Java 17+ vendor-neutral telemetry abstraction (tracing + metrics) with a pluggable OpenTelemetry binding. Lets libraries emit spans and instruments without pulling the OpenTelemetry API into their dependency graph, and lets applications swap in a real backend (OpenTelemetry out of the box; any `ServiceLoader`-registered SPI implementation — Jaeger, Zipkin, a custom recorder, etc. — works the same way) or a no-op fallback.
 
 Licensed under the Apache 2.0 license.
 
@@ -70,6 +70,8 @@ Telemetry.withSpanVoid ("outbound.send", ETelemetrySpanKind.PRODUCER, aSpan -> {
 ```
 
 Exceptions thrown inside the body are automatically recorded on the span and the status is set to `ERROR`. If no tracer SPI is registered, the body still runs and `aSpan` is a no-op.
+
+`ETelemetrySpanKind` mirrors OpenTelemetry's `SpanKind`: `INTERNAL`, `CLIENT`, `SERVER`, `PRODUCER`, `CONSUMER`. Use `Telemetry.withSpan (name, kind, body)` when the body needs to return a value; `withSpanVoid (...)` for the void-returning case. Both start the span, record exceptions, set OK/ERROR status, and close the span in a `finally` block. `Telemetry.startSpan (...)` is also available for callers that want to manage the lifecycle manually — `ITelemetrySpan` exposes typed attribute setters (`setAttribute (String, String|long|double|boolean)`), `recordException (Throwable)`, and `setStatusOk ()` / `setStatusError (String)`.
 
 ## Recording metrics
 
