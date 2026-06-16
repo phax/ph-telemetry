@@ -21,6 +21,9 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertThrows;
 
+import java.io.IOException;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.junit.After;
 import org.junit.Test;
 
@@ -107,6 +110,58 @@ public final class TelemetryTest
   }
 
   @Test
+  public void testWithSpanThrowingReturnsValue () throws IOException
+  {
+    final String sResult = Telemetry.withSpanThrowing ("test.span", ETelemetrySpanKind.INTERNAL, aSpan -> {
+      assertNotNull (aSpan);
+      if (aSpan == null)
+        throw new IOException ("unreachable");
+      return "ok";
+    });
+    assertEquals ("ok", sResult);
+  }
+
+  @Test
+  public void testWithSpanThrowingPropagatesCheckedException ()
+  {
+    final IOException aThrown = assertThrows (IOException.class,
+                                               () -> Telemetry.withSpanThrowing ("test.span",
+                                                                                 ETelemetrySpanKind.INTERNAL,
+                                                                                 aSpan -> {
+                                                                                   throw new IOException ("io boom");
+                                                                                 }));
+    assertEquals ("io boom", aThrown.getMessage ());
+  }
+
+  @Test
+  public void testWithSpanVoidThrowingPropagatesCheckedException ()
+  {
+    final IOException aThrown = assertThrows (IOException.class,
+                                               () -> Telemetry.withSpanVoidThrowing ("test.span",
+                                                                                     ETelemetrySpanKind.INTERNAL,
+                                                                                     aSpan -> {
+                                                                                       throw new IOException ("io boom");
+                                                                                     }));
+    assertEquals ("io boom", aThrown.getMessage ());
+  }
+
+  @Test
+  public void testWithSpanThrowingRecordsExceptionOnSpan ()
+  {
+    // Install a recorder that captures the exception forwarded to recordException
+    final AtomicReference <Throwable> aRecorded = new AtomicReference <> ();
+    Telemetry.install ( (sName, eKind) -> new RecordingSpan (aRecorded));
+
+    assertThrows (IOException.class,
+                  () -> Telemetry.withSpanVoidThrowing ("test.span", ETelemetrySpanKind.INTERNAL, aSpan -> {
+                    throw new IOException ("boom");
+                  }));
+    final Throwable aSeen = aRecorded.get ();
+    assertNotNull (aSeen);
+    assertEquals ("boom", aSeen.getMessage ());
+  }
+
+  @Test
   public void testInstallCustomTracer ()
   {
     final ITelemetryTracerSPI aRecorder = (@org.jspecify.annotations.NonNull final String sName,
@@ -116,6 +171,70 @@ public final class TelemetryTest
     {
       assertEquals (MarkerSpan.class, aSpan.getClass ());
     }
+  }
+
+  private static final class RecordingSpan implements ITelemetrySpan
+  {
+    private final AtomicReference <Throwable> m_aRecorded;
+
+    RecordingSpan (@org.jspecify.annotations.NonNull final AtomicReference <Throwable> aRecorded)
+    {
+      m_aRecorded = aRecorded;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan setAttribute (@org.jspecify.annotations.NonNull final String sKey,
+                                        @org.jspecify.annotations.Nullable final String sValue)
+    {
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan setAttribute (@org.jspecify.annotations.NonNull final String sKey, final boolean bValue)
+    {
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan setAttribute (@org.jspecify.annotations.NonNull final String sKey, final long nValue)
+    {
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan setAttribute (@org.jspecify.annotations.NonNull final String sKey, final double dValue)
+    {
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan recordException (@org.jspecify.annotations.NonNull final Throwable aException)
+    {
+      m_aRecorded.set (aException);
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan addEvent (@org.jspecify.annotations.NonNull final String sName,
+                                    @org.jspecify.annotations.NonNull final TelemetryAttributes aAttributes)
+    {
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan setStatusOk ()
+    {
+      return this;
+    }
+
+    @org.jspecify.annotations.NonNull
+    public ITelemetrySpan setStatusError (@org.jspecify.annotations.Nullable final String sMessage)
+    {
+      return this;
+    }
+
+    public void close ()
+    {}
   }
 
   private static final class MarkerSpan implements ITelemetrySpan

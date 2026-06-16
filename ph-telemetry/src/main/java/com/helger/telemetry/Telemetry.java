@@ -168,6 +168,95 @@ public final class Telemetry
     }
   }
 
+  /**
+   * Like {@link #withSpan(String, ETelemetrySpanKind, Function)} but the body may declare a checked
+   * exception via {@link IThrowingSpanFunction}. Any {@link Throwable} thrown by the body is
+   * recorded on the span (with status {@code ERROR}) and re-thrown. The span is ended in a
+   * {@code finally} block.
+   *
+   * @param sName
+   *        The span name. Never <code>null</code>.
+   * @param eKind
+   *        The span kind. Never <code>null</code>.
+   * @param aBody
+   *        The body. Never <code>null</code>. Receives the active span.
+   * @param <T>
+   *        Body return type.
+   * @param <E>
+   *        Throwable type the body may raise.
+   * @return The value returned by the body.
+   * @throws E
+   *         If the body throws.
+   */
+  public static <T, E extends Throwable> T withSpanThrowing (@NonNull final String sName,
+                                                             @NonNull final ETelemetrySpanKind eKind,
+                                                             @NonNull final IThrowingSpanFunction <T, E> aBody) throws E
+  {
+    try (final ITelemetrySpan aSpan = startSpan (sName, eKind))
+    {
+      try
+      {
+        return aBody.apply (aSpan);
+      }
+      catch (final Throwable ex)
+      {
+        // Record-then-rethrow. Wrap the record-call so a defective backend cannot mask the
+        // original.
+        try
+        {
+          aSpan.recordException (ex).setStatusError (ex.getMessage ());
+        }
+        catch (final Throwable ex2)
+        {
+          // intentional: do not let the recording itself swallow the user's exception
+        }
+        throw ex;
+      }
+    }
+  }
+
+  /**
+   * Like {@link #withSpanVoid(String, ETelemetrySpanKind, Consumer)} but the body may declare a
+   * checked exception via {@link IThrowingSpanConsumer}. Any {@link Throwable} thrown by the body
+   * is recorded on the span (with status {@code ERROR}) and re-thrown. The span is ended in a
+   * {@code finally} block.
+   *
+   * @param sName
+   *        The span name. Never <code>null</code>.
+   * @param eKind
+   *        The span kind. Never <code>null</code>.
+   * @param aBody
+   *        The body. Never <code>null</code>. Receives the active span.
+   * @param <E>
+   *        Throwable type the body may raise.
+   * @throws E
+   *         If the body throws.
+   */
+  public static <E extends Throwable> void withSpanVoidThrowing (@NonNull final String sName,
+                                                                 @NonNull final ETelemetrySpanKind eKind,
+                                                                 @NonNull final IThrowingSpanConsumer <E> aBody) throws E
+  {
+    try (final ITelemetrySpan aSpan = startSpan (sName, eKind))
+    {
+      try
+      {
+        aBody.accept (aSpan);
+      }
+      catch (final Throwable ex)
+      {
+        try
+        {
+          aSpan.recordException (ex).setStatusError (ex.getMessage ());
+        }
+        catch (final Throwable ex2)
+        {
+          // intentional: do not let the recording itself swallow the user's exception
+        }
+        throw ex;
+      }
+    }
+  }
+
   // === No-op fallback ===
 
   public static final class NoOpTelemetryTracer implements ITelemetryTracerSPI

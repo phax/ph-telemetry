@@ -36,7 +36,7 @@ The split is deliberate: libraries that just want to emit telemetry depend on `p
 
 ### Key Classes
 
-- **`Telemetry`** (`ph-telemetry`) — static facade for tracing. Resolves `ITelemetryTracerSPI` lazily via `ServiceLoader`; falls back to a no-op tracer if none is registered. Use `Telemetry.withSpan(...)` / `Telemetry.withSpanVoid(...)` to automatically record exceptions and ensure the span is closed.
+- **`Telemetry`** (`ph-telemetry`) — static facade for tracing. Resolves `ITelemetryTracerSPI` lazily via `ServiceLoader`; falls back to a no-op tracer if none is registered. Use `Telemetry.withSpan(...)` / `Telemetry.withSpanVoid(...)` to automatically record exceptions and ensure the span is closed. For bodies that declare a checked exception, use `withSpanThrowing(...)` / `withSpanVoidThrowing(...)` — they take `IThrowingSpanFunction<T, E>` / `IThrowingSpanConsumer<E>`, catch `Throwable` (defensively guarding `recordException`), and re-throw `E` without wrapping.
 - **`TelemetryMetrics`** (`ph-telemetry`) — static facade for metrics (counters, up-down counters, histograms, observable gauges). Same SPI pattern as `Telemetry`.
 - **`ITelemetrySpan`**, **`ETelemetrySpanKind`**, **`TelemetryAttributes`** — the per-call abstractions. `TelemetryAttributes` is immutable and exposed via a typed visitor (`IVisitor`) so SPI implementations dispatch values without `instanceof` checks.
 - **`ITelemetryTracerSPI`** / **`ITelemetryMeterSPI`** — the SPIs that backends implement; ServiceLoader-discovered, one wins.

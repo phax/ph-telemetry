@@ -73,6 +73,29 @@ Exceptions thrown inside the body are automatically recorded on the span and the
 
 `ETelemetrySpanKind` mirrors OpenTelemetry's `SpanKind`: `INTERNAL`, `CLIENT`, `SERVER`, `PRODUCER`, `CONSUMER`. Use `Telemetry.withSpan (name, kind, body)` when the body needs to return a value; `withSpanVoid (...)` for the void-returning case. Both start the span, record exceptions, set OK/ERROR status, and close the span in a `finally` block. `Telemetry.startSpan (...)` is also available for callers that want to manage the lifecycle manually — `ITelemetrySpan` exposes typed attribute setters (`setAttribute (String, String|long|double|boolean)`), `recordException (Throwable)`, and `setStatusOk ()` / `setStatusError (String)`.
 
+### Bodies that throw checked exceptions
+
+`withSpan (...)` and `withSpanVoid (...)` take a `Function` / `Consumer` and therefore cannot accept a body that declares a checked exception. Use the `*Throwing` variants when the body needs to throw — they take `IThrowingSpanFunction <T, E>` / `IThrowingSpanConsumer <E>`, propagate `E` from the call, and still record the exception on the span before re-throwing:
+
+```java
+// returns a value, may throw IOException
+final byte[] aPayload = Telemetry.<byte[], IOException> withSpanThrowing (
+    "payload.read", ETelemetrySpanKind.INTERNAL, aSpan -> {
+      final byte[] aBytes = readRequestBody ();
+      aSpan.setAttribute ("payload.size_bytes", aBytes.length);
+      return aBytes;
+    });
+
+// void, may throw IOException
+Telemetry.<IOException> withSpanVoidThrowing (
+    "outbound.send", ETelemetrySpanKind.PRODUCER, aSpan -> {
+      aSpan.setAttribute ("transaction.id", sTxID);
+      sendOverHttp (...);   // throws IOException
+    });
+```
+
+The throwing variants catch `Throwable` (not just `RuntimeException`), so they also handle `Error` correctly: the exception is recorded on the span and the original is always re-thrown — a defective backend that itself throws from `recordException` cannot mask the user's exception.
+
 ## Recording metrics
 
 ```java
@@ -147,9 +170,16 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
+v1.0.1 - 2026-06-16
+* New `Telemetry.withSpanThrowing (...)` and `Telemetry.withSpanVoidThrowing (...)` variants that accept a body declaring a checked exception (`IThrowingSpanFunction <T, E>` / `IThrowingSpanConsumer <E>`).
+  The throwable is recorded on the span and re-thrown without wrapping — callers no longer need to smuggle a checked exception through a `RuntimeException`.
+  Both variants catch `Throwable` and defensively guard the `recordException` call so a defective backend cannot mask the user's exception.
+
 v1.0.0 - 2026-06-12
-* Initial release as a standalone repository. The abstraction (`Telemetry`, `TelemetryMetrics`, `ITelemetryTracerSPI`, `ITelemetryMeterSPI`, `TelemetryAttributes`, instrument interfaces, no-op fallbacks) is unchanged from its previous home in `ph-commons:ph-telemetry` v12.3.0 — only the Maven coordinates moved from `com.helger.commons:ph-telemetry` to `com.helger.telemetry:ph-telemetry`.
-* New module `ph-telemetry-otel` extracted from per-project OpenTelemetry bindings. Provides `OtelTelemetryTracerSPI` and `OtelTelemetryMeterSPI` as subclassable base classes that wrap the OpenTelemetry API; project subclasses supply only the instrumentation scope name and version.
+* Initial release as a standalone repository.
+  The abstraction (`Telemetry`, `TelemetryMetrics`, `ITelemetryTracerSPI`, `ITelemetryMeterSPI`, `TelemetryAttributes`, instrument interfaces, no-op fallbacks) is unchanged from its previous home in `ph-commons:ph-telemetry` v12.3.0 — only the Maven coordinates moved from `com.helger.commons:ph-telemetry` to `com.helger.telemetry:ph-telemetry`.
+* New module `ph-telemetry-otel` extracted from per-project OpenTelemetry bindings.
+  Provides `OtelTelemetryTracerSPI` and `OtelTelemetryMeterSPI` as subclassable base classes that wrap the OpenTelemetry API; project subclasses supply only the instrumentation scope name and version.
 * `ph-telemetry-otel` depends on `opentelemetry-api` only — applications that also need the SDK (autoconfigure, OTLP exporter, etc.) pull those dependencies themselves at the deployment boundary.
 
 ---
