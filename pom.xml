@@ -64,7 +64,7 @@
 
   <properties>
     <ph-commons.version>12.3.4</ph-commons.version>
-    <opentelemetry.version>1.64.0</opentelemetry.version>
+    <opentelemetry.version>1.65.0</opentelemetry.version>
   </properties>
 
   <dependencyManagement>
