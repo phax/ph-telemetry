@@ -63,7 +63,7 @@
   </developers>
 
   <properties>
-    <ph-commons.version>12.3.5</ph-commons.version>
+    <ph-commons.version>12.4.0</ph-commons.version>
     <opentelemetry.version>1.65.0</opentelemetry.version>
   </properties>
 
