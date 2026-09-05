@@ -170,7 +170,7 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
-v1.0.2 - work in progress
+v1.0.2 - 2026-09-05
 * New package `com.helger.telemetry.mock` with `CapturingTelemetry` — an in-memory `ITelemetryTracerSPI` + `ITelemetryMeterSPI` implementation for unit tests.
   It captures span names, kinds, attributes, events, recorded exceptions and status, plus every single counter/up-down-counter/histogram recording including its attributes, and it retains gauge suppliers.
   Install it with `install ()` and restore the no-op defaults with `CapturingTelemetry.uninstall ()`; `reset ()` clears the captured data in place so instruments cached in a static initializer stay wired.
