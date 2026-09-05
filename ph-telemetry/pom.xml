@@ -62,6 +62,12 @@
       <groupId>com.helger.commons</groupId>
       <artifactId>ph-base</artifactId>
     </dependency>
+    <!-- Only needed for the "com.helger.telemetry.mock" package -->
+    <dependency>
+      <groupId>com.helger.commons</groupId>
+      <artifactId>ph-collection</artifactId>
+      <optional>true</optional>
+    </dependency>
 
     <dependency>
       <groupId>com.helger.commons</groupId>
