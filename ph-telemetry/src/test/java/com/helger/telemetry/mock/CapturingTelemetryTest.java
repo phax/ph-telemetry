@@ -152,6 +152,9 @@ public final class CapturingTelemetryTest
 
     assertEquals (2, m_aTelemetry.getMeasurements ().size ());
     assertEquals (2, m_aTelemetry.getMeasurements ("test.counter").size ());
+    assertEquals (2, m_aTelemetry.getMeasurementCount ());
+    assertEquals (2, m_aTelemetry.getMeasurementCount ("test.counter"));
+    assertEquals (0, m_aTelemetry.getMeasurementCount ("unknown"));
 
     final CapturedMeasurement aFirst = m_aTelemetry.getFirstMeasurement ("test.counter");
     assertNotNull (aFirst);
@@ -170,7 +173,7 @@ public final class CapturingTelemetryTest
     aUDC.add (-2);
 
     assertEquals (3, m_aTelemetry.getCounterValue ("test.udc"));
-    assertEquals (2, m_aTelemetry.getMeasurements ("test.udc").size ());
+    assertEquals (2, m_aTelemetry.getMeasurementCount ("test.udc"));
   }
 
   @Test
@@ -226,13 +229,15 @@ public final class CapturingTelemetryTest
     assertEquals (0, m_aTelemetry.getCounterValue ("test.counter"));
     assertTrue (m_aTelemetry.getHistogramValues ("test.hist").isEmpty ());
     assertTrue (m_aTelemetry.getMeasurements ().isEmpty ());
+    assertEquals (0, m_aTelemetry.getMeasurementCount ());
 
     // The instruments handed out before the reset must still feed this instance
     aCounter.add (2);
     aHist.record (9.0);
     assertEquals (2, m_aTelemetry.getCounterValue ("test.counter"));
     assertEquals (1, m_aTelemetry.getHistogramValues ("test.hist").size ());
-    assertEquals (2, m_aTelemetry.getMeasurements ().size ());
+    assertEquals (2, m_aTelemetry.getMeasurementCount ());
+    assertEquals (1, m_aTelemetry.getMeasurementCount ("test.counter"));
   }
 
   @Test

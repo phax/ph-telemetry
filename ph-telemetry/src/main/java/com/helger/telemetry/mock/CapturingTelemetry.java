@@ -773,6 +773,26 @@ public final class CapturingTelemetry implements ITelemetryTracerSPI, ITelemetry
   }
 
   /**
+   * @return The total number of captured values, across all counters, up-down counters and
+   *         histograms.
+   */
+  public int getMeasurementCount ()
+  {
+    return m_aRWLock.readLockedInt (m_aMeasurements::size);
+  }
+
+  /**
+   * @param sInstrumentName
+   *        The instrument name to match. Never <code>null</code>.
+   * @return The number of values recorded against that instrument. This counts the recordings, not
+   *         their sum — see {@link #getCounterValue(String)} for the aggregate.
+   */
+  public int getMeasurementCount (@NonNull final String sInstrumentName)
+  {
+    return m_aRWLock.readLockedInt (() -> m_aMeasurements.getCount (x -> sInstrumentName.equals (x.getInstrumentName ())));
+  }
+
+  /**
    * @param sName
    *        The instrument name. Never <code>null</code>.
    * @return The aggregated value of the counter or up-down counter with that name, or {@code 0} if
