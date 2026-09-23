@@ -7,7 +7,7 @@
 > If this project saved you some time or made your day a little easier, a star would mean a lot — it helps others find it too.
 <!-- ph-badge-end -->
 
-Java 17+ vendor-neutral telemetry abstraction (tracing + metrics) with a pluggable OpenTelemetry binding. Lets libraries emit spans and instruments without pulling the OpenTelemetry API into their dependency graph, and lets applications swap in a real backend (OpenTelemetry out of the box; any `ServiceLoader`-registered SPI implementation — Jaeger, Zipkin, a custom recorder, etc. — works the same way) or a no-op fallback.
+Java 17+ vendor-neutral telemetry abstraction (tracing + metrics) with pluggable OpenTelemetry and Java Flight Recorder bindings. Lets libraries emit spans and instruments without pulling the OpenTelemetry API into their dependency graph, and lets applications swap in a real backend (OpenTelemetry and JFR out of the box; any `ServiceLoader`-registered SPI implementation — Jaeger, Zipkin, a custom recorder, etc. — works the same way), several backends at once, or a no-op fallback.
 
 Licensed under the Apache 2.0 license.
 
@@ -15,6 +15,7 @@ Licensed under the Apache 2.0 license.
 
 * **`ph-telemetry`** — the abstraction itself. Static facades `Telemetry` (tracing) and `TelemetryMetrics` (counters / up-down counters / histograms / observable gauges), backed by SPIs (`ITelemetryTracerSPI`, `ITelemetryMeterSPI`). If no SPI is registered, both facades transparently degrade to cheap no-ops, so libraries can emit telemetry unconditionally without forcing the cost or the dependency on downstream consumers.
 * **`ph-telemetry-otel`** — the OpenTelemetry binding. Provides `OtelTelemetryTracerSPI` and `OtelTelemetryMeterSPI` as subclassable base classes that resolve the SDK via `GlobalOpenTelemetry`. Project applications subclass them with a no-arg constructor supplying an instrumentation scope name + version, register the subclass via `META-INF/services`, and let `ServiceLoader` wire it all up at runtime.
+* **`ph-telemetry-jfr`** — the Java Flight Recorder binding. Provides `JfrTelemetryTracerSPI` and `JfrTelemetryMeterSPI`, which turn spans and instruments into JFR events in the `ph-telemetry` event category, readable in JDK Mission Control or via `jdk.jfr.consumer`. It depends on nothing but the JDK's own `jdk.jfr` module — no third-party dependency at all. Unlike OpenTelemetry this is a *local* sink, so it complements an exporter rather than replacing it.
 
 # Maven usage
 
@@ -32,6 +33,14 @@ Add the following to your `pom.xml`, where `x.y.z` is the latest released versio
 <dependency>
   <groupId>com.helger.telemetry</groupId>
   <artifactId>ph-telemetry-otel</artifactId>
+  <version>x.y.z</version>
+</dependency>
+```
+
+```xml
+<dependency>
+  <groupId>com.helger.telemetry</groupId>
+  <artifactId>ph-telemetry-jfr</artifactId>
   <version>x.y.z</version>
 </dependency>
 ```
@@ -152,6 +161,96 @@ META-INF/services/com.helger.telemetry.ITelemetryMeterSPI
 
 Initialise the OpenTelemetry SDK once at application startup (e.g. via `AutoConfiguredOpenTelemetrySdk.builder().setResultAsGlobal().build()`). The SPI bindings resolve the SDK from `GlobalOpenTelemetry` on first use; until the SDK is installed, the OTel no-op returned by `GlobalOpenTelemetry.get()` keeps the whole pipeline cheap.
 
+## Wiring Java Flight Recorder
+
+`JfrTelemetryTracerSPI` and `JfrTelemetryMeterSPI` have no instrumentation scope to configure, so they are registered directly — no subclass needed:
+
+```
+META-INF/services/com.helger.telemetry.ITelemetryTracerSPI
+  -> com.helger.telemetry.jfr.JfrTelemetryTracerSPI
+
+META-INF/services/com.helger.telemetry.ITelemetryMeterSPI
+  -> com.helger.telemetry.jfr.JfrTelemetryMeterSPI
+```
+
+Nothing else has to be started: the binding emits JFR events, and whether they are recorded is decided by the JVM's recording configuration (`-XX:StartFlightRecording`, `jcmd JFR.start`, JDK Mission Control or a programmatic `jdk.jfr.Recording`). When no recording has the event type enabled, `startSpan (...)` returns the no-op span and the instruments do nothing.
+
+These event types are emitted, all of them in the JFR categories `ph-telemetry / Tracing` and `ph-telemetry / Metrics`. `CJfrTelemetry` exposes every name as a constant:
+
+| Event type | Kind | Content |
+|---|---|---|
+| `com.helger.telemetry.Span` | duration | one event per span: name, kind, `traceID`, `spanID`, `parentSpanID`, status, attributes |
+| `com.helger.telemetry.SpanMarker` | instant | `addEvent (...)` inside a span, correlated via `spanID` |
+| `com.helger.telemetry.SpanException` | instant | `recordException (...)`: exception class + message, with a JFR stack trace |
+| `com.helger.telemetry.Counter` | periodic | running total per counter and attribute set |
+| `com.helger.telemetry.UpDownCounter` | periodic | current value per up-down counter and attribute set |
+| `com.helger.telemetry.Gauge` | periodic | one sample per gauge |
+| `com.helger.telemetry.Histogram` | instant | one event per recorded value — the most volume-intensive type |
+
+The three periodic types default to a period of one second. Everything — period, threshold, stack traces, enablement — is configurable per recording:
+
+```java
+try (final Recording aRecording = new Recording ())
+{
+  aRecording.enable (CJfrTelemetry.EVENT_SPAN).withThreshold (Duration.ofMillis (10));
+  aRecording.enable (CJfrTelemetry.EVENT_GAUGE).withPeriod (Duration.ofSeconds (5));
+  aRecording.disable (CJfrTelemetry.EVENT_HISTOGRAM);
+  aRecording.start ();
+  ...
+}
+```
+
+Three properties of JFR are worth knowing before relying on this binding:
+
+* **Attributes are flattened.** A JFR event has a fixed schema and no map-valued field type, so attributes are rendered into a single `attributes` string of escaped `key=value` pairs separated by `;`. The declared value type is lost in the process — run an OpenTelemetry backend alongside if typed dimensions matter.
+* **Spans are thread-affine.** JFR attributes an event to the thread that commits it, and parent/child nesting is tracked per thread. The try-with-resources usage the abstraction is built around is correct; handing a span to another thread is not.
+* **Event-type granularity.** Enablement and thresholds apply to a whole event type, not to an individual span name. A `withThreshold (...)` on `com.helger.telemetry.Span` silently drops *every* span shorter than that.
+
+## Running several backends side by side
+
+`Telemetry` and `TelemetryMetrics` resolve only the *first* `ServiceLoader`-registered SPI. To feed more than one backend — an OpenTelemetry exporter for the distributed trace and JFR for the local recording, say — register a single `CompositeTelemetryTracerSPI` / `CompositeTelemetryMeterSPI` that fans out to all of them:
+
+```java
+public final class MyAppTracerSPI extends CompositeTelemetryTracerSPI
+{
+  public MyAppTracerSPI ()
+  {
+    super (new MyAppOtelTracerSPI (), new MyAppJfrTracerSPI ());
+  }
+}
+
+public final class MyAppMeterSPI extends CompositeTelemetryMeterSPI
+{
+  public MyAppMeterSPI ()
+  {
+    super (new MyAppOtelMeterSPI (), new JfrTelemetryMeterSPI ());
+  }
+}
+```
+
+Delegates are invoked in the order given, and in reverse order on `close ()`. That order matters: a delegate that wants to observe what another one established must come after it. This is what makes the two recordings joinable — list the OpenTelemetry tracer first and let the JFR binding adopt the IDs the OTel span has just created, so the `.jfr` file and the exported trace carry the same identifiers:
+
+```java
+public final class MyAppJfrTracerSPI extends JfrTelemetryTracerSPI
+{
+  @Override
+  protected String getExternalTraceID ()
+  {
+    final SpanContext aCtx = Span.current ().getSpanContext ();
+    return aCtx.isValid () ? aCtx.getTraceId () : null;
+  }
+
+  @Override
+  protected String getExternalSpanID ()
+  {
+    final SpanContext aCtx = Span.current ().getSpanContext ();
+    return aCtx.isValid () ? aCtx.getSpanId () : null;
+  }
+}
+```
+
+The composites perform no exception handling: a delegate that throws aborts the fan-out and propagates to the caller, exactly as a single directly registered SPI would.
+
 ## Tests
 
 Tests can install a custom recording SPI without needing an SDK:
@@ -170,7 +269,14 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
-v1.0.3 - work in progress
+v1.1.0 - work in progress
+* New module `ph-telemetry-jfr` with the Java Flight Recorder binding, in the new package `com.helger.telemetry.jfr`.
+  `JfrTelemetryTracerSPI` emits one `com.helger.telemetry.Span` duration event per span plus `SpanMarker` and `SpanException` events, links spans nested on the same thread through a `parentSpanID` field, and generates trace and span IDs in the OpenTelemetry format — overridable via `getExternalTraceID ()` / `getExternalSpanID ()` so a recording can adopt the IDs of an OpenTelemetry span and be joined against the exported trace.
+  `JfrTelemetryMeterSPI` accumulates counters and up-down counters in process and samples them plus the observable gauges via periodic JFR events, while every histogram value becomes its own event.
+  `CJfrTelemetry` exposes all emitted event type names as constants, for use in `.jfc` settings or `Recording.enable (String)`.
+  The module depends on nothing but `ph-telemetry` and the JDK's own `jdk.jfr` module.
+* Added `CompositeTelemetryTracerSPI` and `CompositeTelemetryMeterSPI` to `ph-telemetry`, fanning every span and every instrument out to a fixed list of delegate backends.
+  `Telemetry` and `TelemetryMetrics` still resolve only the first `ServiceLoader`-registered SPI, so registering a single composite is the supported way to run more than one backend at the same time — e.g. an OpenTelemetry exporter next to the new JFR binding.
 * Added `CapturingTelemetry.getMeasurementCount ()` and `getMeasurementCount (String)` to count the captured recordings — overall or per instrument — mirroring the existing `getSpanCount (...)` methods.
 
 v1.0.2 - 2026-09-05

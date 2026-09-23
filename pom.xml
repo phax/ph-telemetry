@@ -26,7 +26,7 @@
   </parent>
   <groupId>com.helger.telemetry</groupId>
   <artifactId>ph-telemetry-parent-pom</artifactId>
-  <version>1.0.3-SNAPSHOT</version>
+  <version>1.1.0-SNAPSHOT</version>
   <packaging>pom</packaging>
   <name>ph-telemetry-parent-pom</name>
   <description>Base POM to build the ph-telemetry projects</description>
@@ -94,6 +94,11 @@
         <artifactId>ph-telemetry-otel</artifactId>
         <version>${project.version}</version>
       </dependency>
+      <dependency>
+        <groupId>com.helger.telemetry</groupId>
+        <artifactId>ph-telemetry-jfr</artifactId>
+        <version>${project.version}</version>
+      </dependency>
     </dependencies>
   </dependencyManagement>
 
@@ -108,5 +113,6 @@
   <modules>
     <module>ph-telemetry</module>
     <module>ph-telemetry-otel</module>
+    <module>ph-telemetry-jfr</module>
   </modules>
 </project>
