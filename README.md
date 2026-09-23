@@ -269,7 +269,7 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
-v1.1.0 - work in progress
+v1.1.0 - 2026-09-23
 * New module `ph-telemetry-jfr` with the Java Flight Recorder binding, in the new package `com.helger.telemetry.jfr`.
   `JfrTelemetryTracerSPI` emits one `com.helger.telemetry.Span` duration event per span plus `SpanMarker` and `SpanException` events, links spans nested on the same thread through a `parentSpanID` field, and generates trace and span IDs in the OpenTelemetry format — overridable via `getExternalTraceID ()` / `getExternalSpanID ()` so a recording can adopt the IDs of an OpenTelemetry span and be joined against the exported trace.
   `JfrTelemetryMeterSPI` accumulates counters and up-down counters in process and samples them plus the observable gauges via periodic JFR events, while every histogram value becomes its own event.
