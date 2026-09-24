@@ -31,8 +31,8 @@ import io.opentelemetry.api.trace.Tracer;
 
 /**
  * Generic OpenTelemetry implementation of {@link ITelemetryTracerSPI}. Resolves the {@link Tracer}
- * from {@link GlobalOpenTelemetry} on first use, caches it, and translates
- * {@link ETelemetrySpanKind} to OTel {@link SpanKind}.
+ * from {@link GlobalOpenTelemetry} on first use and translates {@link ETelemetrySpanKind} to OTel
+ * {@link SpanKind}.
  * <p>
  * Subclass with a no-arg constructor that supplies the instrumentation scope name and version, then
  * register the subclass via {@code META-INF/services/com.helger.telemetry.ITelemetryTracerSPI}:
@@ -47,9 +47,10 @@ import io.opentelemetry.api.trace.Tracer;
  * }
  * </pre>
  * <p>
- * If the OTel SDK has not been initialised, {@link GlobalOpenTelemetry#get()} returns the official
- * no-op {@code OpenTelemetry} — every span operation through this adapter then becomes a cheap
- * no-op at the SDK level.
+ * If no {@code OpenTelemetry} instance is registered yet, every span operation through this adapter
+ * becomes a cheap no-op at the SDK level — but the adapter neither claims the global slot nor
+ * remembers the no-op tracer, so an SDK that is installed later takes effect. See
+ * {@link #startSpan(String, ETelemetrySpanKind)} for why that matters.
  *
  * @author Philip Helger
  */
@@ -57,7 +58,12 @@ public class OtelTelemetryTracerSPI implements ITelemetryTracerSPI
 {
   private final String m_sScopeName;
   private final String m_sScopeVersion;
+  // Resolved from a registered OpenTelemetry instance - final, because the global one can only be
+  // set once
   private volatile Tracer m_aTracer;
+  // Resolved while no OpenTelemetry instance was registered yet - must be dropped as soon as one
+  // is
+  private volatile Tracer m_aTracerWithoutGlobal;
 
   /**
    * @param sScopeName
@@ -72,17 +78,44 @@ public class OtelTelemetryTracerSPI implements ITelemetryTracerSPI
   }
 
   @NonNull
+  private Tracer _buildTracer ()
+  {
+    // Deliberately "getOrNoop ()" and not "get ()": the latter registers the no-op instance as the
+    // global one if none is set yet, and every later "GlobalOpenTelemetry.set (...)" then fails
+    // with an IllegalStateException - so merely taking a span before the SDK bootstrap of the
+    // application would break that bootstrap. "getOrNoop ()" is what the OpenTelemetry API
+    // documents for instrumentation and has no such side effect.
+    final var aBuilder = GlobalOpenTelemetry.getOrNoop ().getTracerProvider ().tracerBuilder (m_sScopeName);
+    if (m_sScopeVersion != null)
+      aBuilder.setInstrumentationVersion (m_sScopeVersion);
+    return aBuilder.build ();
+  }
+
+  @NonNull
   private Tracer _tracer ()
   {
-    Tracer aRet = m_aTracer;
-    if (aRet == null)
+    // Fast path: a tracer of a registered OpenTelemetry instance can never become stale
+    final Tracer aTracer = m_aTracer;
+    if (aTracer != null)
+      return aTracer;
+
+    if (!GlobalOpenTelemetry.isSet ())
     {
-      final var aBuilder = GlobalOpenTelemetry.get ().getTracerProvider ().tracerBuilder (m_sScopeName);
-      if (m_sScopeVersion != null)
-        aBuilder.setInstrumentationVersion (m_sScopeVersion);
-      aRet = aBuilder.build ();
-      m_aTracer = aRet;
+      // Nothing registered yet, e.g. because the SDK bootstrap of the application did not run yet.
+      // The tracer built here is the no-op one and is deliberately NOT remembered as the final
+      // one: otherwise a single span taken too early would leave every span of this JVM a no-op,
+      // even after the SDK is installed a moment later
+      Tracer aRet = m_aTracerWithoutGlobal;
+      if (aRet == null)
+      {
+        aRet = _buildTracer ();
+        m_aTracerWithoutGlobal = aRet;
+      }
+      return aRet;
     }
+
+    final Tracer aRet = _buildTracer ();
+    m_aTracer = aRet;
     return aRet;
   }
 

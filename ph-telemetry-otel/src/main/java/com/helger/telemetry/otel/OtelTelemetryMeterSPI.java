@@ -40,8 +40,8 @@ import io.opentelemetry.api.metrics.ObservableLongGauge;
 
 /**
  * Generic OpenTelemetry implementation of {@link ITelemetryMeterSPI}. Resolves the {@link Meter}
- * from {@link GlobalOpenTelemetry} on first use, caches it, and translates instrument creation
- * one-to-one to the underlying OpenTelemetry meter API.
+ * from {@link GlobalOpenTelemetry} on first use and translates instrument creation one-to-one to
+ * the underlying OpenTelemetry meter API.
  * <p>
  * Subclass with a no-arg constructor that supplies the instrumentation scope name and version, then
  * register the subclass via {@code META-INF/services/com.helger.telemetry.ITelemetryMeterSPI}:
@@ -56,9 +56,11 @@ import io.opentelemetry.api.metrics.ObservableLongGauge;
  * }
  * </pre>
  * <p>
- * If the OTel SDK has not been initialised, {@link GlobalOpenTelemetry#get()} returns the official
- * no-op {@code OpenTelemetry} — every instrument operation through this adapter then becomes a
- * cheap no-op at the SDK level.
+ * If no {@code OpenTelemetry} instance is registered yet, every instrument operation through this
+ * adapter becomes a cheap no-op at the SDK level — but the adapter neither claims the global slot
+ * nor remembers the no-op meter, so an SDK that is installed later takes effect. Note that an
+ * instrument that was created before is <b>not</b> re-created: it keeps pointing at the meter it
+ * was built from, so instruments should be created after the SDK bootstrap.
  *
  * @author Philip Helger
  */
@@ -66,7 +68,11 @@ public class OtelTelemetryMeterSPI implements ITelemetryMeterSPI
 {
   private final String m_sScopeName;
   private final String m_sScopeVersion;
+  // Resolved from a registered OpenTelemetry instance - final, because the global one can only be
+  // set once
   private volatile Meter m_aMeter;
+  // Resolved while no OpenTelemetry instance was registered yet - must be dropped as soon as one is
+  private volatile Meter m_aMeterWithoutGlobal;
 
   /**
    * @param sScopeName
@@ -81,17 +87,44 @@ public class OtelTelemetryMeterSPI implements ITelemetryMeterSPI
   }
 
   @NonNull
+  private Meter _buildMeter ()
+  {
+    // Deliberately "getOrNoop ()" and not "get ()": the latter registers the no-op instance as the
+    // global one if none is set yet, and every later "GlobalOpenTelemetry.set (...)" then fails
+    // with an IllegalStateException - so merely creating an instrument before the SDK bootstrap of
+    // the application would break that bootstrap. "getOrNoop ()" is what the OpenTelemetry API
+    // documents for instrumentation and has no such side effect.
+    final MeterBuilder aBuilder = GlobalOpenTelemetry.getOrNoop ().getMeterProvider ().meterBuilder (m_sScopeName);
+    if (m_sScopeVersion != null)
+      aBuilder.setInstrumentationVersion (m_sScopeVersion);
+    return aBuilder.build ();
+  }
+
+  @NonNull
   private Meter _meter ()
   {
-    Meter aRet = m_aMeter;
-    if (aRet == null)
+    // Fast path: a meter of a registered OpenTelemetry instance can never become stale
+    final Meter aMeter = m_aMeter;
+    if (aMeter != null)
+      return aMeter;
+
+    if (!GlobalOpenTelemetry.isSet ())
     {
-      final MeterBuilder aBuilder = GlobalOpenTelemetry.get ().getMeterProvider ().meterBuilder (m_sScopeName);
-      if (m_sScopeVersion != null)
-        aBuilder.setInstrumentationVersion (m_sScopeVersion);
-      aRet = aBuilder.build ();
-      m_aMeter = aRet;
+      // Nothing registered yet, e.g. because the SDK bootstrap of the application did not run yet.
+      // The meter built here is the no-op one and is deliberately NOT remembered as the final one:
+      // otherwise a single instrument created too early would leave every instrument of this JVM a
+      // no-op, even after the SDK is installed a moment later
+      Meter aRet = m_aMeterWithoutGlobal;
+      if (aRet == null)
+      {
+        aRet = _buildMeter ();
+        m_aMeterWithoutGlobal = aRet;
+      }
+      return aRet;
     }
+
+    final Meter aRet = _buildMeter ();
+    m_aMeter = aRet;
     return aRet;
   }
 

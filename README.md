@@ -269,6 +269,14 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
+v1.1.1 - work in progress
+* **`ph-telemetry-otel` no longer claims the global `OpenTelemetry` slot, and no longer keeps a no-op tracer or meter forever.**
+  `OtelTelemetryTracerSPI` and `OtelTelemetryMeterSPI` resolved their tracer / meter via `GlobalOpenTelemetry.get ()`, which is not a read: on an unset global it *registers* the official no-op instance itself, and every later `GlobalOpenTelemetry.set (...)` then fails with `IllegalStateException: GlobalOpenTelemetry.set has already been called`. So a single span taken before the application had bootstrapped its SDK broke that bootstrap - in one reported case a Flyway migration wrapped in a span by `ph-db-flyway` took down the whole application startup ([phoss-ap#102](https://github.com/phax/phoss-ap/issues/102)).
+  Both adapters now use **`GlobalOpenTelemetry.getOrNoop ()`**, which is what the OpenTelemetry API documents for instrumentation and has no such side effect, so telemetry taken too early is a harmless no-op instead of a time bomb.
+  In addition, the resolved tracer / meter is only **cached once an instance is really registered** (`GlobalOpenTelemetry.isSet ()`). Before that the no-op is handed out but not remembered, so an SDK installed a moment later takes effect - previously the first early span pinned the no-op for the lifetime of the JVM and all telemetry stayed silently dead. The hot path after the SDK is registered is unchanged: a single volatile read.
+  Note that instruments (counters, histograms, gauges) created before the SDK was registered keep pointing at the meter they were built from - create them after the bootstrap.
+  **Behaviour change to be aware of:** `GlobalOpenTelemetry.get ()` is also the only thing that honours `-Dotel.java.global-autoconfigure.enabled=true`, the OpenTelemetry option that builds and registers an SDK on the first access. `getOrNoop ()` deliberately does not, so an application that relied on the first span of `ph-telemetry-otel` to trigger that autoconfiguration must now install the SDK itself - which is the supported way anyway. As a side effect the one-time JUL INFO message "AutoConfiguredOpenTelemetrySdk found on classpath but automatic configuration is disabled" is gone, because it is emitted from that same code path.
+
 v1.1.0 - 2026-09-23
 * New module `ph-telemetry-jfr` with the Java Flight Recorder binding, in the new package `com.helger.telemetry.jfr`.
   `JfrTelemetryTracerSPI` emits one `com.helger.telemetry.Span` duration event per span plus `SpanMarker` and `SpanException` events, links spans nested on the same thread through a `parentSpanID` field, and generates trace and span IDs in the OpenTelemetry format — overridable via `getExternalTraceID ()` / `getExternalSpanID ()` so a recording can adopt the IDs of an OpenTelemetry span and be joined against the exported trace.
