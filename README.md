@@ -269,7 +269,7 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
-v1.1.1 - work in progress
+v1.1.1 - 2026-09-24
 * **`ph-telemetry-otel` no longer claims the global `OpenTelemetry` slot, and no longer keeps a no-op tracer or meter forever.**
   `OtelTelemetryTracerSPI` and `OtelTelemetryMeterSPI` resolved their tracer / meter via `GlobalOpenTelemetry.get ()`, which is not a read: on an unset global it *registers* the official no-op instance itself, and every later `GlobalOpenTelemetry.set (...)` then fails with `IllegalStateException: GlobalOpenTelemetry.set has already been called`. So a single span taken before the application had bootstrapped its SDK broke that bootstrap - in one reported case a Flyway migration wrapped in a span by `ph-db-flyway` took down the whole application startup ([phoss-ap#102](https://github.com/phax/phoss-ap/issues/102)).
   Both adapters now use **`GlobalOpenTelemetry.getOrNoop ()`**, which is what the OpenTelemetry API documents for instrumentation and has no such side effect, so telemetry taken too early is a harmless no-op instead of a time bomb.
