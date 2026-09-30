@@ -50,10 +50,7 @@ public final class JfrAttributesConverterTest
   @Test
   public void testNullStringValueIsDropped ()
   {
-    final TelemetryAttributes aAttrs = TelemetryAttributes.builder ()
-                                                          .put ("a", (String) null)
-                                                          .put ("b", "x")
-                                                          .build ();
+    final TelemetryAttributes aAttrs = TelemetryAttributes.builder ().put ("a", (String) null).put ("b", "x").build ();
     assertEquals ("b=x", JfrAttributesConverter.toFlatString (aAttrs));
   }
 

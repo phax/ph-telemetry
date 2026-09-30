@@ -35,10 +35,10 @@ import com.helger.base.enforce.ValueEnforcer;
  * Every factory method creates one instrument per delegate and returns a fan-out instrument that
  * forwards each recording to all of them, in the order the delegates were passed in.
  * <p>
- * Note on {@link #createGauge(String, String, String, LongSupplier)}: the same
- * {@link LongSupplier} is handed to every delegate, so it is polled once per delegate and at each
- * delegate's own cadence. The supplier must be cheap and thread-safe anyway (that is the general
- * SPI contract), but with N delegates it is invoked N times as often.
+ * Note on {@link #createGauge(String, String, String, LongSupplier)}: the same {@link LongSupplier}
+ * is handed to every delegate, so it is polled once per delegate and at each delegate's own
+ * cadence. The supplier must be cheap and thread-safe anyway (that is the general SPI contract),
+ * but with N delegates it is invoked N times as often.
  * <p>
  * No exception handling is performed: a delegate that throws aborts the fan-out and propagates to
  * the caller.
