@@ -52,7 +52,7 @@ Or import the BOM and skip per-module versions:
   <dependencies>
     <dependency>
       <groupId>com.helger.telemetry</groupId>
-      <artifactId>ph-telemetry-parent-pom</artifactId>
+      <artifactId>ph-telemetry-bom</artifactId>
       <version>x.y.z</version>
       <type>pom</type>
       <scope>import</scope>
@@ -268,6 +268,9 @@ Tests can install a custom recording SPI without needing an SDK:
 `TelemetryMetrics.install (...)` works the same way for the metrics side.
 
 # News and noteworthy
+
+v1.1.2 - work in progress
+* New module `ph-telemetry-bom` - a dedicated Bill of Materials with the managed versions of `ph-telemetry`, `ph-telemetry-otel` and `ph-telemetry-jfr`. Import it instead of `ph-telemetry-parent-pom`, which also carries the build configuration of this project.
 
 v1.1.1 - 2026-09-24
 * **`ph-telemetry-otel` no longer claims the global `OpenTelemetry` slot, and no longer keeps a no-op tracer or meter forever.**

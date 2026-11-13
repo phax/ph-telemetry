@@ -23,7 +23,7 @@ mvn test -pl ph-telemetry -Dtest=TelemetryTest#testNoOpFallback
 
 ## Project Overview
 
-ph-telemetry is a small three-module Java library (Java 17+, built with Java 21). Parent POM: `com.helger:parent-pom`. Provides a vendor-neutral telemetry abstraction (tracing + metrics) with pluggable OpenTelemetry and Java Flight Recorder bindings. Was previously shipped as `com.helger.commons:ph-telemetry` inside `ph-commons`; that module is now `@Deprecated(forRemoval = true)`.
+ph-telemetry is a small three-module Java library (plus the `ph-telemetry-bom` Bill of Materials) (Java 17+, built with Java 21). Parent POM: `com.helger:parent-pom`. Provides a vendor-neutral telemetry abstraction (tracing + metrics) with pluggable OpenTelemetry and Java Flight Recorder bindings. Was previously shipped as `com.helger.commons:ph-telemetry` inside `ph-commons`; that module is now `@Deprecated(forRemoval = true)`.
 
 ### Module Dependency Graph
 
