@@ -269,7 +269,7 @@ Tests can install a custom recording SPI without needing an SDK:
 
 # News and noteworthy
 
-v1.1.2 - work in progress
+v1.1.2 - 2026-11-13
 * New module `ph-telemetry-bom` - a dedicated Bill of Materials with the managed versions of `ph-telemetry`, `ph-telemetry-otel` and `ph-telemetry-jfr`. Import it instead of `ph-telemetry-parent-pom`, which also carries the build configuration of this project.
 
 v1.1.1 - 2026-09-24
